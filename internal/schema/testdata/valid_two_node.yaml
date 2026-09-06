@@ -1,0 +1,8 @@
+nodes:
+  - id: a
+    type: shell
+    command: "echo a"
+  - id: b
+    type: shell
+    depends_on: [a]
+    command: "echo b"

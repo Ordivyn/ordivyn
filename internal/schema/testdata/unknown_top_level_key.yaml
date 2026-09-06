@@ -1,0 +1,5 @@
+bogus: true
+nodes:
+  - id: a
+    type: shell
+    command: "echo a"

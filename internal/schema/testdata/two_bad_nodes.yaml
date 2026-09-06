@@ -1,0 +1,5 @@
+nodes:
+  - id: a
+    type: agent
+  - type: shell
+    command: "echo b"

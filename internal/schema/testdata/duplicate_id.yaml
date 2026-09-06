@@ -1,0 +1,7 @@
+nodes:
+  - id: a
+    type: shell
+    command: "echo a"
+  - id: a
+    type: shell
+    command: "echo b"
