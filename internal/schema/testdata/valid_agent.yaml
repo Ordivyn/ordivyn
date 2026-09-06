@@ -1,0 +1,6 @@
+nodes:
+  - id: a
+    type: agent
+    prompt: |
+      line one of the prompt
+      line two of the prompt

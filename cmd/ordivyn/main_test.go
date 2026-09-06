@@ -6,6 +6,9 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/Ordivyn/ordivyn/internal/engine"
+	"github.com/Ordivyn/ordivyn/internal/schema"
 )
 
 // writeWorkflow writes contents to a file inside t.TempDir() and returns its
@@ -161,5 +164,58 @@ func TestCLI_LoadErrorSurfacesBeforeExecute(t *testing.T) {
 	}
 	if !strings.Contains(errOut.String(), "schema:") {
 		t.Errorf("stderr = %q, want it to contain the Load error's own %q prefix", errOut.String(), "schema:")
+	}
+}
+
+func TestCLI_ValidateAgentWorkflowPrintsOK(t *testing.T) {
+	path := writeWorkflow(t, `nodes:
+  - id: a
+    type: agent
+    prompt: "do the thing"
+`)
+	var out, errOut bytes.Buffer
+	code := run([]string{"validate", path}, &out, &errOut)
+	if code != 0 {
+		t.Fatalf("exit code = %d, want 0 (stderr: %s)", code, errOut.String())
+	}
+	if out.String() != "ok\n" {
+		t.Errorf("stdout = %q, want %q", out.String(), "ok\n")
+	}
+}
+
+func TestCLI_RunRejectsAgentNodeMissingPromptBeforeExecute(t *testing.T) {
+	path := writeWorkflow(t, `nodes:
+  - id: a
+    type: agent
+`)
+	var out, errOut bytes.Buffer
+	code := run([]string{"run", path}, &out, &errOut)
+	if code != 1 {
+		t.Fatalf("exit code = %d, want 1", code)
+	}
+	if !strings.Contains(errOut.String(), `requires field "prompt"`) {
+		t.Errorf("stderr = %q, want it to contain the Load decode error, proving rejection happens before Execute", errOut.String())
+	}
+}
+
+func TestCLI_PrintResultsShowsAgentText(t *testing.T) {
+	var out, errOut bytes.Buffer
+	results := map[engine.NodeID]engine.Result{
+		"a": {Status: engine.StatusOK, Output: schema.AgentOutput{Text: "the answer"}},
+	}
+	printResults(&out, &errOut, results)
+	if !strings.Contains(out.String(), "the answer") {
+		t.Errorf("stdout = %q, want it to contain %q", out.String(), "the answer")
+	}
+}
+
+func TestCLI_PrintResultsFallsBackToRawStdoutOnAgentFailure(t *testing.T) {
+	var out, errOut bytes.Buffer
+	results := map[engine.NodeID]engine.Result{
+		"a": {Status: engine.StatusFailed, Output: schema.AgentOutput{Stdout: "Error: model not found"}},
+	}
+	printResults(&out, &errOut, results)
+	if !strings.Contains(out.String(), "Error: model not found") {
+		t.Errorf("stdout = %q, want it to contain the raw Stdout since Text is empty", out.String())
 	}
 }

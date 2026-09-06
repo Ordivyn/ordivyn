@@ -52,9 +52,9 @@ func Load(path string) (engine.Graph, error) {
 }
 
 // decodeNode turns one rawNode into an engine.Node by switching on Type.
-// A plain string switch, not a registry: exactly one case exists today
-// ("shell"). A registry designed before a second kind exists would be
-// guessing at its own shape.
+// A plain string switch, not a registry: exactly two cases exist today
+// ("shell", "agent"). A registry designed before a third kind exists would
+// be guessing at its own shape.
 func decodeNode(n rawNode, index int) (engine.Node, error) {
 	label := nodeLabel(n.ID, index)
 	if n.ID == "" {
@@ -69,11 +69,22 @@ func decodeNode(n rawNode, index int) (engine.Node, error) {
 	}
 	switch n.Type {
 	case "shell":
+		if n.Prompt != "" {
+			return engine.Node{}, fmt.Errorf("%s: field %q is not valid for type %q", label, "prompt", "shell")
+		}
 		if n.Command == "" {
 			return engine.Node{}, fmt.Errorf("%s: type %q requires field %q", label, "shell", "command")
 		}
 		return engine.Node{ID: engine.NodeID(n.ID), DependsOn: deps, Run: newShellFunc(n.Command)}, nil
+	case "agent":
+		if n.Command != "" {
+			return engine.Node{}, fmt.Errorf("%s: field %q is not valid for type %q", label, "command", "agent")
+		}
+		if n.Prompt == "" {
+			return engine.Node{}, fmt.Errorf("%s: type %q requires field %q", label, "agent", "prompt")
+		}
+		return engine.Node{ID: engine.NodeID(n.ID), DependsOn: deps, Run: newAgentFunc(agentBin, agentArgs, n.Prompt)}, nil
 	default:
-		return engine.Node{}, fmt.Errorf("%s: unknown type %q (known types: shell)", label, n.Type)
+		return engine.Node{}, fmt.Errorf("%s: unknown type %q (known types: shell, agent)", label, n.Type)
 	}
 }

@@ -115,6 +115,19 @@ func printResults(out io.Writer, errOut io.Writer, results map[engine.NodeID]eng
 				fmt.Fprint(errOut, so.Stderr)
 			}
 		}
+		if ao, ok := r.Output.(schema.AgentOutput); ok {
+			if ao.Text != "" {
+				fmt.Fprint(out, ao.Text)
+			} else if ao.Stdout != "" {
+				// Text is only set once JSON decoding succeeds. On a
+				// nonzero exit or a decode failure, whatever the CLI
+				// printed is still the only clue why - never discard it.
+				fmt.Fprint(out, ao.Stdout)
+			}
+			if ao.Stderr != "" {
+				fmt.Fprint(errOut, ao.Stderr)
+			}
+		}
 	}
 }
 

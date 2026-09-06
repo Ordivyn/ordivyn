@@ -1,0 +1,5 @@
+nodes:
+  - id: a
+    type: agent
+    prompt: "do the thing"
+    command: "echo a"

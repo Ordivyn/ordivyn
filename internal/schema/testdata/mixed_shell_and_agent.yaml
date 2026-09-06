@@ -1,0 +1,8 @@
+nodes:
+  - id: a
+    type: shell
+    command: "echo a"
+  - id: b
+    type: agent
+    depends_on: [a]
+    prompt: "do the thing"

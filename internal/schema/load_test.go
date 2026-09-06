@@ -84,16 +84,16 @@ func TestLoad_MissingTypeRejected(t *testing.T) {
 	}
 }
 
-func TestLoad_UnknownTypeRejected(t *testing.T) {
+func TestLoad_UnknownTypeErrorListsBothKnownTypes(t *testing.T) {
 	_, err := Load("testdata/unknown_type.yaml")
 	if err == nil {
 		t.Fatal("Load returned nil error, want unknown type rejected")
 	}
-	if !strings.Contains(err.Error(), `unknown type "agent"`) {
+	if !strings.Contains(err.Error(), `unknown type "bogus"`) {
 		t.Errorf("error = %q, want it to name the bad value", err.Error())
 	}
-	if !strings.Contains(err.Error(), "shell") {
-		t.Errorf("error = %q, want it to list known types", err.Error())
+	if !strings.Contains(err.Error(), "shell") || !strings.Contains(err.Error(), "agent") {
+		t.Errorf("error = %q, want it to list both known types", err.Error())
 	}
 }
 
@@ -120,7 +120,7 @@ func TestLoad_AggregatesMultipleNodeErrors(t *testing.T) {
 	if len(errs) != 2 {
 		t.Fatalf("len(errs) = %d, want 2 (got: %v)", len(errs), errs)
 	}
-	if !strings.Contains(err.Error(), `unknown type "agent"`) {
+	if !strings.Contains(err.Error(), `unknown type "bogus"`) {
 		t.Errorf("error = %q, want it to mention the unknown type", err.Error())
 	}
 	if !strings.Contains(err.Error(), `missing required field "id"`) {
@@ -165,4 +165,73 @@ func TestLoad_DoesNotValidateGraphStructure(t *testing.T) {
 			t.Fatal("engine.Validate returned nil error, want it to report the duplicate id")
 		}
 	})
+}
+
+func TestLoad_ValidAgentWorkflowProducesGraph(t *testing.T) {
+	// Execution is not exercised here — decodeNode only builds the
+	// closure; running it is agent_test.go's job.
+	g, err := Load("testdata/valid_agent.yaml")
+	if err != nil {
+		t.Fatalf("Load returned error: %v", err)
+	}
+	if len(g.Nodes) != 1 {
+		t.Fatalf("len(g.Nodes) = %d, want 1", len(g.Nodes))
+	}
+	if g.Nodes[0].ID != "a" {
+		t.Errorf("g.Nodes[0].ID = %q, want %q", g.Nodes[0].ID, "a")
+	}
+}
+
+func TestLoad_AgentNodeMissingPromptRejected(t *testing.T) {
+	_, err := Load("testdata/agent_missing_prompt.yaml")
+	if err == nil {
+		t.Fatal("Load returned nil error, want missing prompt rejected")
+	}
+	if !strings.Contains(err.Error(), `requires field "prompt"`) {
+		t.Errorf("error = %q, want it to mention missing prompt", err.Error())
+	}
+}
+
+func TestLoad_AgentNodeWithStrayCommandFieldRejected(t *testing.T) {
+	_, err := Load("testdata/agent_stray_command.yaml")
+	if err == nil {
+		t.Fatal("Load returned nil error, want stray command field rejected")
+	}
+	if !strings.Contains(err.Error(), `field "command" is not valid for type "agent"`) {
+		t.Errorf("error = %q, want it to name the stray field", err.Error())
+	}
+}
+
+func TestLoad_ShellNodeWithStrayPromptFieldRejected(t *testing.T) {
+	_, err := Load("testdata/shell_stray_prompt.yaml")
+	if err == nil {
+		t.Fatal("Load returned nil error, want stray prompt field rejected")
+	}
+	if !strings.Contains(err.Error(), `field "prompt" is not valid for type "shell"`) {
+		t.Errorf("error = %q, want it to name the stray field", err.Error())
+	}
+}
+
+func TestLoad_MixedShellAndAgentWorkflowProducesGraph(t *testing.T) {
+	g, err := Load("testdata/mixed_shell_and_agent.yaml")
+	if err != nil {
+		t.Fatalf("Load returned error: %v", err)
+	}
+	if len(g.Nodes) != 2 {
+		t.Fatalf("len(g.Nodes) = %d, want 2", len(g.Nodes))
+	}
+	byID := make(map[engine.NodeID]engine.Node, len(g.Nodes))
+	for _, n := range g.Nodes {
+		byID[n.ID] = n
+	}
+	if _, ok := byID["a"]; !ok {
+		t.Fatalf("node %q not found", "a")
+	}
+	b, ok := byID["b"]
+	if !ok {
+		t.Fatalf("node %q not found", "b")
+	}
+	if len(b.DependsOn) != 1 || b.DependsOn[0] != "a" {
+		t.Errorf("node b DependsOn = %v, want [a]", b.DependsOn)
+	}
 }
