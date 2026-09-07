@@ -20,7 +20,7 @@ func runWithTimeout(t *testing.T, ctx context.Context, g Graph, limit int, d tim
 	}
 	ch := make(chan out, 1)
 	go func() {
-		r, err := Execute(ctx, g, limit)
+		r, err := Execute(ctx, g, limit, nil, nil)
 		ch <- out{r, err}
 	}()
 	select {
@@ -53,7 +53,7 @@ func TestExecute_InvalidGraphRunsNothing(t *testing.T) {
 			return nil, nil
 		}},
 	}}
-	results, err := Execute(context.Background(), g, 1)
+	results, err := Execute(context.Background(), g, 1, nil, nil)
 	if err == nil {
 		t.Fatal("expected error for invalid graph, got nil")
 	}
@@ -74,7 +74,7 @@ func TestExecute_RejectsNonPositiveLimit(t *testing.T) {
 				return nil, nil
 			}},
 		}}
-		results, err := Execute(context.Background(), g, limit)
+		results, err := Execute(context.Background(), g, limit, nil, nil)
 		if err == nil {
 			t.Fatalf("limit=%d: expected error, got nil", limit)
 		}
@@ -88,7 +88,7 @@ func TestExecute_RejectsNonPositiveLimit(t *testing.T) {
 }
 
 func TestExecute_EmptyGraphReturnsEmptyResults(t *testing.T) {
-	results, err := Execute(context.Background(), Graph{}, 1)
+	results, err := Execute(context.Background(), Graph{}, 1, nil, nil)
 	if err != nil {
 		t.Fatalf("expected no error, got: %v", err)
 	}
@@ -125,7 +125,7 @@ func TestExecute_NodeWaitsForBothDependencies(t *testing.T) {
 	}
 	done := make(chan out, 1)
 	go func() {
-		r, err := Execute(context.Background(), g, 2)
+		r, err := Execute(context.Background(), g, 2, nil, nil)
 		done <- out{r, err}
 	}()
 
@@ -175,7 +175,7 @@ func TestExecute_LinearChainRespectsOrder(t *testing.T) {
 			return "C-output", nil
 		}},
 	}}
-	results, err := Execute(context.Background(), g, 2)
+	results, err := Execute(context.Background(), g, 2, nil, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -202,7 +202,7 @@ func TestExecute_DiamondJoinReceivesBothOutputs(t *testing.T) {
 			return "D-out", nil
 		}},
 	}}
-	results, err := Execute(context.Background(), g, 2)
+	results, err := Execute(context.Background(), g, 2, nil, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -229,7 +229,7 @@ func TestExecute_SiblingIndependenceAcrossDisjointBranches(t *testing.T) {
 			return "z", nil
 		}},
 	}}
-	results, err := Execute(context.Background(), g, 2)
+	results, err := Execute(context.Background(), g, 2, nil, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -258,7 +258,7 @@ func TestExecute_FailureSkipsOnlyRealDescendants(t *testing.T) {
 			return "d", nil
 		}},
 	}}
-	results, err := Execute(context.Background(), g, 2)
+	results, err := Execute(context.Background(), g, 2, nil, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -290,7 +290,7 @@ func TestExecute_PartialFailureInDiamondStillSkipsJoin(t *testing.T) {
 			return "d", nil
 		}},
 	}}
-	results, err := Execute(context.Background(), g, 2)
+	results, err := Execute(context.Background(), g, 2, nil, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -313,7 +313,7 @@ func TestExecute_SkipErrorIsTraceableToRootCause(t *testing.T) {
 			return nil, nil
 		}},
 	}}
-	results, err := Execute(context.Background(), g, 1)
+	results, err := Execute(context.Background(), g, 1, nil, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -343,7 +343,7 @@ func TestExecute_AllNodesAlwaysAccountedFor(t *testing.T) {
 			return "d", nil
 		}},
 	}}
-	results, err := Execute(context.Background(), g, 2)
+	results, err := Execute(context.Background(), g, 2, nil, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -374,7 +374,7 @@ func TestExecute_ConcurrencyLimitExactlyReached(t *testing.T) {
 				return nil, nil
 			}}
 		}
-		results, err := Execute(context.Background(), Graph{Nodes: nodes}, limit)
+		results, err := Execute(context.Background(), Graph{Nodes: nodes}, limit, nil, nil)
 		if err != nil {
 			t.Fatalf("limit=%d: unexpected error: %v", limit, err)
 		}
@@ -445,7 +445,7 @@ func TestExecute_DeterministicDispatchOrderAtLimitOne(t *testing.T) {
 		var order []NodeID
 		var mu sync.Mutex
 		g := makeGraph(&order, &mu)
-		results, err := Execute(context.Background(), g, 1)
+		results, err := Execute(context.Background(), g, 1, nil, nil)
 		if err != nil {
 			t.Fatalf("run %d: unexpected error: %v", run, err)
 		}
@@ -499,7 +499,7 @@ func TestExecute_OutputIsOpaque(t *testing.T) {
 			return nil, nil
 		}},
 	}}
-	results, err := Execute(context.Background(), g, 1)
+	results, err := Execute(context.Background(), g, 1, nil, nil)
 	if err != nil {
 		t.Fatalf("unexpected error (Execute should never inspect opaque output): %v", err)
 	}
@@ -519,7 +519,7 @@ func TestExecute_PanicIsContained(t *testing.T) {
 			return "s", nil
 		}},
 	}}
-	results, err := Execute(context.Background(), g, 2)
+	results, err := Execute(context.Background(), g, 2, nil, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -591,7 +591,7 @@ func TestExecute_CancellationMidRunPreservesFinishedResults(t *testing.T) {
 	}
 	done := make(chan out, 1)
 	go func() {
-		r, err := Execute(ctx, g, 1)
+		r, err := Execute(ctx, g, 1, nil, nil)
 		done <- out{r, err}
 	}()
 
@@ -616,5 +616,217 @@ func TestExecute_CancellationMidRunPreservesFinishedResults(t *testing.T) {
 		}
 	case <-time.After(2 * time.Second):
 		t.Fatal("Execute did not return in time — possible goroutine leak")
+	}
+}
+
+// --- Execute: onStart/onResult observer contracts ---
+
+// diamondWithFailingRoot builds a → b,c; b,c → d, with a failing, so b, c,
+// and d are all skipped. Shared by the observer tests below.
+func diamondWithFailingRoot(t *testing.T) Graph {
+	t.Helper()
+	errA := errors.New("a failed")
+	return Graph{Nodes: []Node{
+		{ID: "a", Run: func(ctx context.Context, in map[NodeID]any) (any, error) {
+			return nil, errA
+		}},
+		{ID: "b", DependsOn: []NodeID{"a"}, Run: func(ctx context.Context, in map[NodeID]any) (any, error) {
+			return nil, nil
+		}},
+		{ID: "c", DependsOn: []NodeID{"a"}, Run: func(ctx context.Context, in map[NodeID]any) (any, error) {
+			return nil, nil
+		}},
+		{ID: "d", DependsOn: []NodeID{"b", "c"}, Run: func(ctx context.Context, in map[NodeID]any) (any, error) {
+			return nil, nil
+		}},
+	}}
+}
+
+func TestExecute_OnResultCalledOnceForEveryNodeIncludingSkipped(t *testing.T) {
+	g := diamondWithFailingRoot(t)
+	var got []Result
+	onResult := func(r Result) { got = append(got, r) }
+
+	results, err := Execute(context.Background(), g, 2, nil, onResult)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(got) != 4 {
+		t.Fatalf("onResult called %d times, want 4", len(got))
+	}
+	byID := make(map[NodeID]Result, len(got))
+	for _, r := range got {
+		byID[r.NodeID] = r
+	}
+	for _, id := range []NodeID{"b", "c", "d"} {
+		if byID[id].Status != StatusSkipped {
+			t.Errorf("onResult's %q: status = %v, want StatusSkipped", id, byID[id].Status)
+		}
+	}
+	if len(byID) != len(results) {
+		t.Fatalf("onResult reported %d distinct nodes, want %d", len(byID), len(results))
+	}
+	for id, want := range results {
+		if got := byID[id]; got != want {
+			t.Errorf("onResult's %q = %+v, want %+v (the same value in the returned map)", id, got, want)
+		}
+	}
+}
+
+func TestExecute_OnStartCalledOnlyForDispatchedNodesNeverForSkipped(t *testing.T) {
+	// A diamond where the root (a) succeeds and one branch (b) fails, so
+	// only the join (d) is skipped — a, b, and c are all actually
+	// dispatched (b's Run runs and returns an error; it isn't skipped).
+	// Unlike diamondWithFailingRoot above (root fails, so every
+	// descendant — b, c, and d — is skipped and never dispatched), this
+	// is the shape needed to prove onStart fires for every dispatched
+	// node and only for those.
+	errB := errors.New("b failed")
+	g := Graph{Nodes: []Node{
+		{ID: "a", Run: func(ctx context.Context, in map[NodeID]any) (any, error) { return "a", nil }},
+		{ID: "b", DependsOn: []NodeID{"a"}, Run: func(ctx context.Context, in map[NodeID]any) (any, error) { return nil, errB }},
+		{ID: "c", DependsOn: []NodeID{"a"}, Run: func(ctx context.Context, in map[NodeID]any) (any, error) { return "c", nil }},
+		{ID: "d", DependsOn: []NodeID{"b", "c"}, Run: func(ctx context.Context, in map[NodeID]any) (any, error) { return nil, nil }},
+	}}
+	var started []NodeID
+	onStart := func(id NodeID) { started = append(started, id) }
+
+	_, err := Execute(context.Background(), g, 2, onStart, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	set := make(map[NodeID]bool, len(started))
+	for _, id := range started {
+		set[id] = true
+	}
+	want := map[NodeID]bool{"a": true, "b": true, "c": true}
+	if len(set) != len(want) {
+		t.Fatalf("onStart ids = %v, want exactly %v", started, want)
+	}
+	for id := range want {
+		if !set[id] {
+			t.Errorf("onStart never called for dispatched node %q", id)
+		}
+	}
+	if set["d"] {
+		t.Error("onStart called for node d, which was skipped and never dispatched")
+	}
+}
+
+func TestExecute_OnStartFiresBeforeOnResultForEveryNode(t *testing.T) {
+	g := Graph{Nodes: []Node{
+		{ID: "A", Run: func(ctx context.Context, in map[NodeID]any) (any, error) { return "a", nil }},
+		{ID: "B", DependsOn: []NodeID{"A"}, Run: func(ctx context.Context, in map[NodeID]any) (any, error) { return "b", nil }},
+		{ID: "C", Run: func(ctx context.Context, in map[NodeID]any) (any, error) { return "c", nil }},
+	}}
+
+	var seq int
+	startIdx := make(map[NodeID]int)
+	resultIdx := make(map[NodeID]int)
+	onStart := func(id NodeID) {
+		seq++
+		startIdx[id] = seq
+	}
+	onResult := func(r Result) {
+		seq++
+		resultIdx[r.NodeID] = seq
+	}
+
+	_, err := Execute(context.Background(), g, 2, onStart, onResult)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	for _, id := range []NodeID{"A", "B", "C"} {
+		si, ok := startIdx[id]
+		if !ok {
+			t.Fatalf("no onStart call recorded for %q", id)
+		}
+		ri, ok := resultIdx[id]
+		if !ok {
+			t.Fatalf("no onResult call recorded for %q", id)
+		}
+		if si >= ri {
+			t.Errorf("node %q: onStart index %d, onResult index %d — want onStart strictly before onResult", id, si, ri)
+		}
+	}
+}
+
+func TestExecute_ObserversNeverCalledForInvalidGraphOrBadLimit(t *testing.T) {
+	var startCalls, resultCalls atomic.Int32
+	onStart := func(NodeID) { startCalls.Add(1) }
+	onResult := func(Result) { resultCalls.Add(1) }
+
+	cyclic := Graph{Nodes: []Node{
+		{ID: "A", DependsOn: []NodeID{"B"}, Run: func(ctx context.Context, in map[NodeID]any) (any, error) { return nil, nil }},
+		{ID: "B", DependsOn: []NodeID{"A"}, Run: func(ctx context.Context, in map[NodeID]any) (any, error) { return nil, nil }},
+	}}
+	if _, err := Execute(context.Background(), cyclic, 2, onStart, onResult); err == nil {
+		t.Fatal("expected error for cyclic graph, got nil")
+	}
+	if startCalls.Load() != 0 || resultCalls.Load() != 0 {
+		t.Errorf("cyclic graph: onStart calls = %d, onResult calls = %d, want 0 and 0", startCalls.Load(), resultCalls.Load())
+	}
+
+	valid := Graph{Nodes: []Node{
+		{ID: "A", Run: func(ctx context.Context, in map[NodeID]any) (any, error) { return nil, nil }},
+	}}
+	if _, err := Execute(context.Background(), valid, 0, onStart, onResult); err == nil {
+		t.Fatal("expected error for limit=0, got nil")
+	}
+	if startCalls.Load() != 0 || resultCalls.Load() != 0 {
+		t.Errorf("limit=0: onStart calls = %d, onResult calls = %d, want 0 and 0", startCalls.Load(), resultCalls.Load())
+	}
+}
+
+func TestExecute_ObserverPanicDoesNotCrashExecuteOrLoseResults(t *testing.T) {
+	g := Graph{Nodes: []Node{
+		{ID: "A", Run: func(ctx context.Context, in map[NodeID]any) (any, error) { return "a", nil }},
+		{ID: "B", DependsOn: []NodeID{"A"}, Run: func(ctx context.Context, in map[NodeID]any) (any, error) { return "b", nil }},
+		{ID: "C", Run: func(ctx context.Context, in map[NodeID]any) (any, error) { return "c", nil }},
+	}}
+
+	panickyResult := func(Result) { panic("boom in onResult") }
+	results, err := Execute(context.Background(), g, 2, nil, panickyResult)
+	if err != nil {
+		t.Fatalf("unexpected error with panicking onResult: %v", err)
+	}
+	for _, id := range []NodeID{"A", "B", "C"} {
+		wantStatus(t, results, id, StatusOK)
+	}
+
+	panickyStart := func(NodeID) { panic("boom in onStart") }
+	results, err = Execute(context.Background(), g, 2, panickyStart, nil)
+	if err != nil {
+		t.Fatalf("unexpected error with panicking onStart: %v", err)
+	}
+	for _, id := range []NodeID{"A", "B", "C"} {
+		wantStatus(t, results, id, StatusOK)
+	}
+}
+
+func TestExecute_NilObserversBehaveExactlyAsBefore(t *testing.T) {
+	makeGraph := func() Graph {
+		return Graph{Nodes: []Node{
+			{ID: "A", Run: func(ctx context.Context, in map[NodeID]any) (any, error) { return "a", nil }},
+			{ID: "B", DependsOn: []NodeID{"A"}, Run: func(ctx context.Context, in map[NodeID]any) (any, error) { return "b", nil }},
+			{ID: "C", DependsOn: []NodeID{"A"}, Run: func(ctx context.Context, in map[NodeID]any) (any, error) { return "c", nil }},
+		}}
+	}
+
+	withNil, err := Execute(context.Background(), makeGraph(), 2, nil, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	withNoop, err := Execute(context.Background(), makeGraph(), 2, func(NodeID) {}, func(Result) {})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(withNil) != len(withNoop) {
+		t.Fatalf("len(withNil) = %d, len(withNoop) = %d, want equal", len(withNil), len(withNoop))
+	}
+	for id, want := range withNil {
+		if got := withNoop[id]; got != want {
+			t.Errorf("node %q: with no-op observers = %+v, want %+v (nil-observer run's value)", id, got, want)
+		}
 	}
 }

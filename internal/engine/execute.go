@@ -19,7 +19,29 @@ import (
 // Worker goroutines do nothing but call node.Run and send their outcome on
 // an unbuffered done chan Result; they never read or write scheduler state
 // directly.
-func Execute(ctx context.Context, g Graph, limit int) (map[NodeID]Result, error) {
+//
+// onStart and onResult, each nilable, are called synchronously on the same
+// single goroutine that already owns all scheduler state.
+//
+// onStart is called exactly once per node that is actually dispatched,
+// immediately before that node's goroutine is launched. It is never
+// called for a node that is skipped — a skipped node's Run is never
+// invoked either, so there is nothing that "started."
+//
+// onResult is called exactly once per node, immediately after that node's
+// Result is finalized and written into the map Execute will eventually
+// return, and before dispatch() is asked to fill the concurrency slot
+// that just freed up. Called for a skipped node exactly as it is for one
+// that actually ran: a skip is as much "what happened" as a success or a
+// failure.
+//
+// Neither is called before both of Execute's own pre-checks (limit >= 1,
+// Validate(g) == nil) have passed, and neither is ever called concurrently
+// with itself or with the other. A panic inside either is recovered here,
+// the same containment Execute already gives a node's own Run panicking —
+// a caller-supplied observer's bug can cost that one event, never the
+// run's results map or the process.
+func Execute(ctx context.Context, g Graph, limit int, onStart func(NodeID), onResult func(Result)) (map[NodeID]Result, error) {
 	if limit <= 0 {
 		return nil, fmt.Errorf("engine: limit must be >= 1, got %d", limit)
 	}
@@ -46,6 +68,9 @@ func Execute(ctx context.Context, g Graph, limit int) (map[NodeID]Result, error)
 	resolve := func(r Result) {
 		results[r.NodeID] = r
 		remaining--
+		if onResult != nil {
+			observe(onResult, r)
+		}
 		failed := r.Status != StatusOK
 		for _, child := range dependents[r.NodeID] {
 			indegree[child]--
@@ -111,6 +136,9 @@ func Execute(ctx context.Context, g Graph, limit int) (map[NodeID]Result, error)
 				inputs[dep] = results[dep].Output // safe: only reached once dep has resolved
 			}
 			running++
+			if onStart != nil {
+				observe(onStart, id)
+			}
 			go func(n Node, in map[NodeID]any) {
 				defer func() {
 					if p := recover(); p != nil {
@@ -136,4 +164,14 @@ func Execute(ctx context.Context, g Graph, limit int) (map[NodeID]Result, error)
 		dispatch()
 	}
 	return results, nil
+}
+
+// observe calls fn with v, recovering any panic so a bug in caller-
+// supplied persistence code can never crash Execute or discard results
+// that already resolved correctly. Generic over the one-argument shape
+// both onStart (func(NodeID)) and onResult (func(Result)) share, rather
+// than two near-identical copies of the same three lines.
+func observe[T any](fn func(T), v T) {
+	defer func() { recover() }()
+	fn(v)
 }

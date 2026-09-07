@@ -35,7 +35,7 @@ func TestLoad_ValidShellWorkflowProducesGraph(t *testing.T) {
 		t.Errorf("node b DependsOn = %v, want [a]", b.DependsOn)
 	}
 
-	results, err := engine.Execute(context.Background(), g, 4)
+	results, err := engine.Execute(context.Background(), g, 4, nil, nil)
 	if err != nil {
 		t.Fatalf("Execute returned error: %v", err)
 	}

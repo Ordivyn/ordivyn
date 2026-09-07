@@ -6,9 +6,11 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"sort"
 
 	"github.com/Ordivyn/ordivyn/internal/engine"
+	"github.com/Ordivyn/ordivyn/internal/history"
 	"github.com/Ordivyn/ordivyn/internal/schema"
 )
 
@@ -16,6 +18,18 @@ const usage = `usage:
   ordivyn validate <file>
   ordivyn run <file> [-limit N]
 `
+
+// historyDir is the one global run-history root, ~/.ordivyn/runs, so every
+// run is recorded in one place a user can find from any working directory —
+// not scattered per-repo. Not a flag: no configurable location has been
+// asked for, and tests isolate it by overriding $HOME.
+func historyDir() (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(home, ".ordivyn", "runs"), nil
+}
 
 func main() {
 	os.Exit(run(os.Args[1:], os.Stdout, os.Stderr))
@@ -72,12 +86,47 @@ func runRun(args []string, out, errOut io.Writer) int {
 		fmt.Fprint(errOut, "usage: ordivyn run <file> [-limit N]\n")
 		return 2
 	}
-	g, err := schema.Load(fs.Arg(0))
+	// Absolute so a stored run is unambiguous about which file it ran,
+	// regardless of the cwd it was launched from.
+	wfPath, err := filepath.Abs(fs.Arg(0))
 	if err != nil {
 		fmt.Fprintf(errOut, "ordivyn: %v\n", err)
 		return 1
 	}
-	results, err := engine.Execute(context.Background(), g, *limit)
+	g, err := schema.Load(wfPath)
+	if err != nil {
+		fmt.Fprintf(errOut, "ordivyn: %v\n", err)
+		return 1
+	}
+
+	var onStart func(engine.NodeID)
+	var onResult func(engine.Result)
+	var run *history.Run
+	root, herr := historyDir()
+	if herr == nil {
+		run, herr = history.New(root, wfPath, *limit, g)
+	}
+	if herr != nil {
+		// A run this brick's own guarantee says must still execute even
+		// when persistence can't be set up at all.
+		fmt.Fprintf(errOut, "ordivyn: warning: run history disabled: %v\n", herr)
+	} else {
+		onStart = run.OnNodeStart
+		onResult = run.OnNodeResult
+	}
+
+	results, err := engine.Execute(context.Background(), g, *limit, onStart, onResult)
+
+	if run != nil {
+		if ferr := run.Finish(results, err); ferr != nil {
+			fmt.Fprintf(errOut, "ordivyn: warning: %v\n", ferr)
+		}
+		for _, w := range run.Warnings() {
+			fmt.Fprintf(errOut, "ordivyn: warning: %s\n", w)
+		}
+		fmt.Fprintf(errOut, "ordivyn: run recorded at %s\n", run.EventsPath())
+	}
+
 	if err != nil {
 		fmt.Fprintf(errOut, "ordivyn: %v\n", err)
 		return 1
